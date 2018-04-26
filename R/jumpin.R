@@ -35,12 +35,10 @@ add_github <- function(repo, org = "ropensci") {
 #' @examples \dontrun{
 #' total_downloads("alm")
 #'}
-total_downloads <- function(pkg, start = NULL, today = NULL) {
-  if(is.null(today)) { today <-  as.Date(now()) }
-  if(is.null(start)) { start <-  as.Date("2012-10-01") }
+total_downloads <- function(pkg, when = "last-week") {
 
-  total <- cranlogs::cran_downloads(package = pkg, from = start, to = today) 
-  sum(total$downloads$downloads)
+  res <- cranlogs::cran_downloads(package = pkg, when = when)
+  sum(res$count)
 }
 
 
@@ -80,73 +78,62 @@ github_stats <- function(repo, verbose = TRUE) {
   # ----------------------------------------------------------------------------
   # Create a new app, set Authorization callback URL = http://localhost:1410 Then
   # copy the keys into your .rprofile with the names below
-  token <- github_auth()
+  #token <- github_auth()
   
   
    if(verbose)  message(sprintf("Now working on %s", repo))
-    repo_url <- paste0("https://api.github.com/repos/", org, "/", package)
-    data <- httr::GET(repo_url, config = c(token = token))
-    if (data$status != 404) 
-        {
-            results <- httr::content(data, "parsed")
-            dl <- httr::content(httr::GET(results$downloads_url, config = c(token = token)), 
-                "parsed")
-            # Need an error handler here for bad gitHub repo names
-            # Note: Repo names are case sensitive
-            downloads <- ifelse(length(dl) == 0, 0, length(dl))
-            collab <- httr::content(httr::GET(results$contributors_url, config = c(token = token)), 
-                "parsed")
-            collaborators <- length(collab)
-            cnames <- lapply(collab, "[", "login")
-            cnames <- sapply(cnames, unname)
-            collaborator_names <- as.character(paste(cnames, collapse = ", "))
-            prs <- length(httr::content(httr::GET(paste0(repo_url, "/pulls"), config = c(token = token)), 
-                "parsed"))
-            # Didn't add closed issues or version number since neither make sense as a reason
-            # for someone to jump in
-            commits_raw <- httr::GET(paste0(repo_url, "/stats/commit_activity"), config = c(token = token))
-            commits <- jsonlite::fromJSON(httr::content(commits_raw, "text"), flatten = TRUE)$total
-            date <- gsub("T", " ", results$pushed_at)
-            date <- gsub("Z", " UTC", date)
-            # Now check to see if package is on CRAN
-            # and if yes, then get the download stats using metacran
-            # --------------------------------------------------------
-            cran_return <- httr::GET(paste0("http://cran.r-project.org/web/packages/", 
-                package, "/index.html"))$status
-            cran <- ifelse(cran_return == 200, "label label-success", "label label-default")
-            cran_downloads <- ifelse(cran_return == 200, total_downloads(package), 0)
-            # --------------------------------------------------------
-            
-            # Milestones ---------------------------------------------
-            milestones <- length(httr::content(httr::GET(paste0(repo_url, "/milestones"), config = c(token = token)), 
-                "parsed"))
-            milestones_closed <- length(httr::content(httr::GET(paste0(repo_url, "/milestones"), 
-                query = list(state = "closed"), config = c(token = token)), "parsed"))
-            total_milestones <- milestones + milestones_closed
-            tm <- as.character(paste0(milestones, "/", total_milestones))
-            mile_ratio <- ifelse(milestones == 0, "-", scales::percent(milestones/total_milestones))
-            # --------------------------------------------------------
-            
-            # Compile everything into a list
-            list(package = results$name, 
-                 desc = results$description, 
-                 updated = date, 
-                forks = results$forks, 
-                stars = results$stargazers_count, 
-                downloads = downloads, 
-                cran_downloads = cran_downloads,  
-                pull_requests = prs, 
-                cran = cran, 
-                collaborators = collaborators, 
-                collaborator_names = collaborator_names, 
-                milestones = mile_ratio, 
-                total_milestones = tm, 
-                watchers = results$subscribers_count, 
-                open_issues = results$open_issues_count, 
-                sparkline = commits)
-        }  # end the 404 if
-}
+    #repo_url <- paste0("https://api.github.com/repos/", org, "/", package)
+    results <- gh::gh("/repos/:org/:package", org = org, package = package)
+  #dl <- httr::content(httr::GET(results$downloads_url),
+    #"parsed")
+  # Need an error handler here for bad gitHub repo names
+  # Note: Repo names are case sensitive
+  #downloads <- gh::gh("/repos/:org/:package/")ifelse(length(dl) == 0, 0, length(dl))
+  collab <- gh::gh("/repos/:org/:package/contributors", org = org, package = package, .limit = Inf)
+  collaborators <- length(collab)
+  collaborator_names <- paste(vapply(collab, `[[`, character(1), "login"), collapse = ", ")
+  prs <- length(gh::gh("/repos/:org/:package/pulls", org = org, package = package), .limit = Inf)
+  # Didn't add closed issues or version number since neither make sense as a reason
+  # for someone to jump in
+  commits <- vapply(gh::gh("/repos/:org/:package/stats/commit_activity", org = org, package = package), `[[`, integer(1), "total")
+  date <- as.POSIXct(results$pushed_at)
+  # Now check to see if package is on CRAN
+  # and if yes, then get the download stats using metacran
+  # --------------------------------------------------------
+  cran_return <- httr::GET(paste0("http://cran.r-project.org/web/packages/", 
+      package, "/index.html"))$status_code
+  cran <- ifelse(cran_return == 200, "label label-success", "label label-default")
+  cran_downloads <- ifelse(cran_return == 200, total_downloads(package), 0)
+  # --------------------------------------------------------
 
+  # Milestones ---------------------------------------------
+  #milestones <- length(gh::gh("/repos/:org/:package/milestones", org = org, package = package))
+  #milestones_closed <- length(gh::gh("/repos/:org/:package/milestones", org = org, package = package, state = "closed"))
+  #total_milestones <- milestones + milestones_closed
+  #tm <- as.character(paste0(milestones, "/", total_milestones))
+  #mile_ratio <- ifelse(milestones == 0, "-", scales::percent(milestones/total_milestones))
+  # --------------------------------------------------------
+
+  # Compile everything into a list
+  list(
+    org = results$organization,
+    package = results$name, 
+    desc = results$description, 
+    updated = date, 
+    forks = results$forks, 
+    stars = results$stargazers_count, 
+    #downloads = downloads, 
+    cran_downloads = cran_downloads,  
+    pull_requests = prs, 
+    cran = cran, 
+    collaborators = collaborators, 
+    collaborator_names = collaborator_names, 
+    #milestones = mile_ratio, 
+    #total_milestones = tm, 
+    watchers = results$subscribers_count, 
+    open_issues = results$open_issues_count, 
+    sparkline = commits)
+}
 
 #' Generates a static html dashboard from GitHub stats and CRAN downloads
 #'
@@ -160,19 +147,19 @@ github_stats <- function(repo, verbose = TRUE) {
 #' generate_html(results)
 #'}
 generate_html <- function(out, path = "/tmp", browse = TRUE) {
-setwd(path)
-last_generated <- lubridate::now("UTC")
-message("writing out html \n")
-# location of all files and deps
-template <- system.file("template.html", package = "dashboard")
-css <- system.file("css", package = "dashboard")
-style <- system.file("style", package = "dashboard")
-js <- system.file("js", package = "dashboard")
-html <- whisker::whisker.render(readLines(template))
-write(html, "index.html")
-file.copy(css, ".", recursive = TRUE, overwrite = TRUE)
-file.copy(js, ".", recursive = TRUE, overwrite = TRUE)
-file.copy(style, ".", recursive = TRUE, overwrite = TRUE)
-message(sprintf("Files written to %s \n", path))
-if(browse) browseURL("index.html") 
+  file <- file.path(path, "index.html")
+  last_generated <- lubridate::now("UTC")
+  message("writing out html \n")
+  # location of all files and deps
+  template <- system.file("template.html", package = "dashboard")
+  css <- system.file("css", package = "dashboard")
+  style <- system.file("style", package = "dashboard")
+  js <- system.file("js", package = "dashboard")
+  html <- whisker::whisker.render(readLines(template))
+  write(html, file)
+  file.copy(css, ".", recursive = TRUE, overwrite = TRUE)
+  file.copy(js, ".", recursive = TRUE, overwrite = TRUE)
+  file.copy(style, ".", recursive = TRUE, overwrite = TRUE)
+  message(sprintf("Files written to %s \n", path))
+  if(browse) browseURL(file)
 }
