@@ -92,7 +92,7 @@ github_stats <- function(repo, verbose = TRUE) {
   collab <- gh::gh("/repos/:org/:package/contributors", org = org, package = package, .limit = Inf)
   collaborators <- length(collab)
   collaborator_names <- paste(vapply(collab, `[[`, character(1), "login"), collapse = ", ")
-  prs <- length(gh::gh("/repos/:org/:package/pulls", org = org, package = package), .limit = Inf)
+  prs <- length(gh::gh("/repos/:org/:package/pulls", org = org, package = package, .limit = Inf))
   # Didn't add closed issues or version number since neither make sense as a reason
   # for someone to jump in
   commits <- vapply(gh::gh("/repos/:org/:package/stats/commit_activity", org = org, package = package), `[[`, integer(1), "total")
@@ -162,4 +162,6 @@ generate_html <- function(out, path = "/tmp", browse = TRUE) {
   file.copy(style, ".", recursive = TRUE, overwrite = TRUE)
   message(sprintf("Files written to %s \n", path))
   if(browse) browseURL(file)
+
+  invisible(file)
 }

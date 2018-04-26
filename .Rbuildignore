@@ -3,3 +3,7 @@ jumpin2.R
 zzz.R
 ^\.httr-oauth$
 dashboard.png
+^.*\.Rproj$
+^\.Rproj\.user$
+^packrat/
+^\.Rprofile$

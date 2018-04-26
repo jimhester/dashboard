@@ -3,3 +3,4 @@
 .RData
 zzz.R
 .httr-oauth
+packrat/lib*/
